@@ -3,8 +3,18 @@
 ## Setup
 
 1. Install dependencies: `pip install -r requirements.txt`
-2. Create data directory: `mkdir data`
-3. Run: `python main.py`
+2. Run: `python main.py`
+3. Optional: Set custom data directory with `export PROJECTS_DATA_DIR=/your/path`
+
+## Features
+
+- Email validation with regex
+- Configurable data storage location via environment variable
+- Atomic file writes to prevent corruption
+- Backup of corrupted data files
+- Input validation for names and titles
+- Duplicate detection for users, projects, and tasks
+- Helpful error messages and usage hints
 
 ## Commands
 
@@ -24,15 +34,15 @@
 - Complete task: `python main.py complete-task --project "CLI Tool" --task "Setup argparse"`
 - List tasks: `python main.py list-tasks --project "CLI Tool"`
 
-## Features
+## Error Handling
 
-- User, project, and task management
-- JSON file persistence
-- Pretty-printed tables using tabulate
-- Basic relationship tracking
+- Validates email format using regex
+- Prevents duplicate entries
+- Handles corrupted/missing data files gracefully
+- Creates automatic backups when data files are corrupted
+- Provides clear error messages for all failure cases
 
 ## Known Issues
 
-- No input validation for emails
-- Data file path is hardcoded
-- Limited error handling for edge cases
+- Large datasets may be slow (in-memory storage)
+- No concurrency support

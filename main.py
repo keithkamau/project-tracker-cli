@@ -1,10 +1,20 @@
 import argparse
 import sys
+import re
 from models.user import User
 from models.project import Project
 from models.task import Task
-from utils.file_handler import load_data, save_data
+from utils.file_handler import load_data, save_data, get_data_path
 from tabulate import tabulate
+
+def validate_email(email):
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return re.match(pattern, email) is not None
+
+def validate_name(name):
+    if not name or len(name.strip()) < 2:
+        return False
+    return True
 
 def main():
     parser = argparse.ArgumentParser(description="Project Management CLI Tool")
@@ -46,31 +56,49 @@ def main():
         parser.print_help()
         return
 
-    data = load_data()
+    try:
+        data = load_data()
+    except Exception as e:
+        print(f"Error loading data: {e}")
+        return
+
     users = data.get("users", [])
     projects = data.get("projects", [])
     tasks = data.get("tasks", [])
 
     if args.command == "add-user":
-        if any(u["name"] == args.name for u in users):
-            print(f"User '{args.name}' already exists.")
+        if not validate_name(args.name):
+            print("Error: Name must be at least 2 characters long.")
+            return
+        if not validate_email(args.email):
+            print("Error: Invalid email format. Use format: user@domain.com")
+            return
+        if any(u["name"].lower() == args.name.lower() for u in users):
+            print(f"Error: User '{args.name}' already exists.")
             return
         users.append({"name": args.name, "email": args.email})
-        save_data({"users": users, "projects": projects, "tasks": tasks})
-        print(f"User '{args.name}' added successfully.")
+        try:
+            save_data({"users": users, "projects": projects, "tasks": tasks})
+            print(f"User '{args.name}' added successfully.")
+        except Exception as e:
+            print(f"Error saving data: {e}")
 
     elif args.command == "list-users":
         if not users:
-            print("No users found.")
+            print("No users found. Add one with: python main.py add-user --name NAME --email EMAIL")
             return
         print(tabulate(users, headers="keys", tablefmt="grid"))
 
     elif args.command == "add-project":
-        if not any(u["name"] == args.user for u in users):
-            print(f"User '{args.user}' not found.")
+        if not validate_name(args.title):
+            print("Error: Project title must be at least 2 characters long.")
             return
-        if any(p["title"] == args.title for p in projects):
-            print(f"Project '{args.title}' already exists.")
+        user_exists = any(u["name"] == args.user for u in users)
+        if not user_exists:
+            print(f"Error: User '{args.user}' not found. Create user first.")
+            return
+        if any(p["title"].lower() == args.title.lower() for p in projects):
+            print(f"Error: Project '{args.title}' already exists.")
             return
         projects.append({
             "title": args.title,
@@ -78,21 +106,35 @@ def main():
             "description": args.description,
             "due_date": args.due
         })
-        save_data({"users": users, "projects": projects, "tasks": tasks})
-        print(f"Project '{args.title}' added for user '{args.user}'.")
+        try:
+            save_data({"users": users, "projects": projects, "tasks": tasks})
+            print(f"Project '{args.title}' added for user '{args.user}'.")
+        except Exception as e:
+            print(f"Error saving data: {e}")
 
     elif args.command == "list-projects":
         filtered = projects
         if args.user:
-            filtered = [p for p in projects if p["user"] == args.user]
+            filtered = [p for p in projects if p["user"].lower() == args.user.lower()]
+            if not filtered:
+                print(f"No projects found for user '{args.user}'.")
+                return
         if not filtered:
             print("No projects found.")
             return
         print(tabulate(filtered, headers="keys", tablefmt="grid"))
 
     elif args.command == "add-task":
-        if not any(p["title"] == args.project for p in projects):
-            print(f"Project '{args.project}' not found.")
+        if not validate_name(args.title):
+            print("Error: Task title must be at least 2 characters long.")
+            return
+        project_exists = any(p["title"] == args.project for p in projects)
+        if not project_exists:
+            print(f"Error: Project '{args.project}' not found.")
+            return
+        task_exists = any(t["project"] == args.project and t["title"].lower() == args.title.lower() for t in tasks)
+        if task_exists:
+            print(f"Error: Task '{args.title}' already exists in project '{args.project}'.")
             return
         tasks.append({
             "project": args.project,
@@ -100,26 +142,35 @@ def main():
             "status": "Pending",
             "assigned_to": args.assigned
         })
-        save_data({"users": users, "projects": projects, "tasks": tasks})
-        print(f"Task '{args.title}' added to project '{args.project}'.")
+        try:
+            save_data({"users": users, "projects": projects, "tasks": tasks})
+            print(f"Task '{args.title}' added to project '{args.project}'.")
+        except Exception as e:
+            print(f"Error saving data: {e}")
 
     elif args.command == "complete-task":
         task_found = False
         for task in tasks:
-            if task["project"] == args.project and task["task"] == args.task:
+            if task["project"] == args.project and task["title"].lower() == args.task.lower():
+                if task["status"] == "Completed":
+                    print(f"Task '{args.task}' is already completed.")
+                    return
                 task["status"] = "Completed"
                 task_found = True
                 break
         if task_found:
-            save_data({"users": users, "projects": projects, "tasks": tasks})
-            print(f"Task '{args.task}' marked as completed.")
+            try:
+                save_data({"users": users, "projects": projects, "tasks": tasks})
+                print(f"Task '{args.task}' marked as completed.")
+            except Exception as e:
+                print(f"Error saving data: {e}")
         else:
-            print("Task not found.")
+            print(f"Error: Task '{args.task}' not found in project '{args.project}'.")
 
     elif args.command == "list-tasks":
-        filtered = [t for t in tasks if t["project"] == args.project]
+        filtered = [t for t in tasks if t["project"].lower() == args.project.lower()]
         if not filtered:
-            print(f"No tasks found for project '{args.project}'.")
+            print(f"No tasks found for project '{args.project}'. Add one with: python main.py add-task --project \"{args.project}\" --title TITLE")
             return
         print(tabulate(filtered, headers="keys", tablefmt="grid"))
 
